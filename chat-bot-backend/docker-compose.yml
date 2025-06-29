@@ -1,0 +1,17 @@
+# docker-compose.yml
+version: '3'
+services:
+  postgres:
+    image: postgres:15
+    restart: always
+    ports:
+      - '5432:5432'
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: admin123
+      POSTGRES_DB: scheduler
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:
