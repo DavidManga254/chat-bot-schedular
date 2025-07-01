@@ -28,7 +28,7 @@ export class UserController {
       tokenExpiry: new Date(userToken.expiry_date),
       name: userToken.name,
       email: userToken.email,
-      // picture: userToken.picture,
+      profile_picture: userToken.picture,
     };
 
     await this.userService.createOrUpdateGoogleUser(createUserData);

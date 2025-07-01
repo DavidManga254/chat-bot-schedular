@@ -13,6 +13,9 @@ export class CreateUserDto {
   @IsString()
   refreshToken: string;
 
+  @IsString()
+  profile_picture: string;
+
   @IsDate()
   tokenExpiry: Date;
 }
