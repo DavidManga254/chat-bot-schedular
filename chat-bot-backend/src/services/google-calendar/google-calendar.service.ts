@@ -4,9 +4,10 @@ import * as dotenv from 'dotenv';
 import { OAuth2Client } from 'google-auth-library';
 import { google } from 'googleapis';
 import { jwtDecode } from 'jwt-decode';
+import prisma from 'prisma/client';
+import { encrypt } from 'src/lib/crypto';
 
-export type GoogleTokenResponse = google.auth.Credentials &
-  GoogleIdTokenPayload;
+export type GoogleTokenResponse = GoogleIdTokenPayload;
 
 dotenv.config();
 
@@ -72,40 +73,61 @@ export class GoogleCalendarService {
     };
   }
 
-  // async createEvent(eventData: {
-  //   title: string;
-  //   startTime: string;
-  //   durationMinutes: number;
-  //   recurrenceRule?: string;
-  //   participants?: string[];
-  // }) {
-  //   const calendar = google.calendar({
-  //     version: 'v3',
-  //     auth: this.oauth2Client,
-  //   });
+  async createEvent(
+    tokens: {
+      access_token: string;
+      refresh_token?: string;
+      expiry_date?: number;
+    },
+    eventData: {
+      title: string;
+      startTime: string;
+      durationMinutes: number;
+      recurrenceRule?: string;
+      participants?: string[];
+    },
+  ) {
+    this.oauth2Client.setCredentials(tokens);
 
-  //   const endTime = new Date(
-  //     new Date(eventData.startTime).getTime() +
-  //       eventData.durationMinutes * 60000,
-  //   ).toISOString();
+    const calendar = google.calendar({
+      version: 'v3',
+      auth: this.oauth2Client,
+    });
 
-  //   const event = {
-  //     summary: eventData.title,
-  //     start: { dateTime: eventData.startTime },
-  //     end: { dateTime: endTime },
-  //     attendees: eventData.participants?.map((email) => ({ email })) || [],
-  //     recurrence: eventData.recurrenceRule
-  //       ? [`RRULE:${eventData.recurrenceRule}`]
-  //       : undefined,
-  //   };
+    const endTime = new Date(
+      new Date(eventData.startTime).getTime() +
+        eventData.durationMinutes * 60000,
+    ).toISOString();
 
-  //   const response = await calendar.events.insert({
-  //     calendarId: 'primary',
-  //     requestBody: event,
-  //   });
+    const event = {
+      summary: eventData.title,
+      start: { dateTime: eventData.startTime },
+      end: { dateTime: endTime },
+      attendees: eventData.participants?.map((email) => ({ email })) || [],
+      recurrence: eventData.recurrenceRule
+        ? [`RRULE:${eventData.recurrenceRule}`]
+        : undefined,
+    };
 
-  //   return response.data;
-  // }
+    const response = await calendar.events.insert({
+      calendarId: 'primary',
+      requestBody: event,
+    });
+
+    // const updatedCreds = this.oauth2Client.credentials;
+
+    // if (updatedCreds.access_token !== tokens.access_token) {
+    //   // Token was refreshed
+    //   await prisma.user.update({
+    //     where: { email: userEmail },
+    //     data: {
+    //       accessToken: encrypt(`${updatedCreds.access_token}`),
+    //       tokenExpiry: new Date(updatedCreds.expiry_date ?? Date.now() + 3600_000),
+    //     },
+    //   });
+
+    return response.data;
+  }
 }
 
 // http://localhost:8080/verify?code=4/0AVMBsJhd9mfR_69e1y5PX0IP9b58Jv2WJDj_q5X4lw222M1mVCjZMz0XQxnIw0tNMH1r1A&scope=https://www.googleapis.com/auth/calendar
@@ -125,4 +147,7 @@ export interface GoogleIdTokenPayload {
   locale?: string;
   iat: number;
   exp: number;
+  access_token: string;
+  refresh_token: string;
+  expiry_date: string;
 }

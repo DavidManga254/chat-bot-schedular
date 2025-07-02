@@ -3,7 +3,7 @@ import * as dotenv from 'dotenv';
 
 dotenv.config();
 
-const ENCRYPTION_KEY = process.env.TOKEN_SECRET_KEY.slice(0, 32); // 256-bit key
+const ENCRYPTION_KEY = `${process.env.TOKEN_SECRET_KEY}`.slice(0, 32); // 256-bit key
 const IV_LENGTH = 16;
 
 export function encrypt(text: string): string {
