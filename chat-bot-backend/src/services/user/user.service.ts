@@ -6,11 +6,7 @@ import { GoogleCalendarService } from '../google-calendar/google-calendar.servic
 
 @Injectable()
 export class UserService {
-  private JWT_SECRET;
-
-  constructor(private googleCalendarService: GoogleCalendarService) {
-    this.JWT_SECRET = process.env.JWT_SECRET ?? 'supersecret';
-  }
+  constructor(private googleCalendarService: GoogleCalendarService) {}
 
   async createOrUpdateGoogleUser(dto: CreateUserDto) {
     const {
@@ -20,6 +16,7 @@ export class UserService {
       refreshToken,
       tokenExpiry,
       profile_picture,
+      timezone,
     } = dto;
 
     return await prisma.user.upsert({
@@ -30,6 +27,7 @@ export class UserService {
         accessToken: encrypt(accessToken),
         refreshToken: encrypt(refreshToken),
         tokenExpiry: new Date(tokenExpiry),
+        timezone: timezone,
       },
       create: {
         email,
@@ -38,6 +36,7 @@ export class UserService {
         accessToken: encrypt(accessToken),
         refreshToken: encrypt(refreshToken),
         tokenExpiry: new Date(tokenExpiry),
+        timezone: timezone,
       },
     });
   }
@@ -53,6 +52,7 @@ export class UserService {
       accessToken: tokens.access_token,
       refreshToken: tokens.refresh_token,
       tokenExpiry: new Date(tokens.exp * 1000),
+      timezone: tokens.timezone,
     });
 
     return {
@@ -82,9 +82,11 @@ export class UserService {
       durationMinutes: number;
       recurrenceRule?: string;
       participants?: string[];
+      timezone: string;
     },
   ) {
     const user = await this.findByEmail(userEmail);
+
     if (!user) {
       throw new Error('User not found');
     }
@@ -96,6 +98,7 @@ export class UserService {
       access_token: decryptedAccessToken,
       refresh_token: decryptedRefreshToken,
       expiry_date: user.tokenExpiry.getTime(),
+      user_email: userEmail,
     };
 
     const event = await this.googleCalendarService.createEvent(

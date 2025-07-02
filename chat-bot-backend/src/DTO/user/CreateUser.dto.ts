@@ -18,6 +18,9 @@ export class CreateUserDto {
 
   @IsDate()
   tokenExpiry: Date;
+
+  @IsString()
+  timezone: string;
 }
 
 export class UserGoogleCodeDTO {

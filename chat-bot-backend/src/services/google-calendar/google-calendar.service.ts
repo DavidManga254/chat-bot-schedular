@@ -51,9 +51,18 @@ export class GoogleCalendarService {
 
     const userInfo = jwtDecode<GoogleIdTokenPayload>(`${tokens.id_token}`);
 
+    this.oauth2Client.setCredentials(tokens);
+
+    const calendar = google.calendar({
+      version: 'v3',
+      auth: this.oauth2Client,
+    });
+    const tzSetting = await calendar.settings.get({ setting: 'timezone' });
+
     return {
       ...tokens,
       ...userInfo,
+      timezone: tzSetting.data.value ?? '',
     };
   }
 
@@ -78,6 +87,7 @@ export class GoogleCalendarService {
       access_token: string;
       refresh_token?: string;
       expiry_date?: number;
+      user_email: string;
     },
     eventData: {
       title: string;
@@ -85,6 +95,7 @@ export class GoogleCalendarService {
       durationMinutes: number;
       recurrenceRule?: string;
       participants?: string[];
+      timezone: string;
     },
   ) {
     this.oauth2Client.setCredentials(tokens);
@@ -101,8 +112,14 @@ export class GoogleCalendarService {
 
     const event = {
       summary: eventData.title,
-      start: { dateTime: eventData.startTime },
-      end: { dateTime: endTime },
+      start: {
+        dateTime: eventData.startTime,
+        timeZone: eventData.timezone,
+      },
+      end: {
+        dateTime: endTime,
+        timeZone: eventData.timezone,
+      },
       attendees: eventData.participants?.map((email) => ({ email })) || [],
       recurrence: eventData.recurrenceRule
         ? [`RRULE:${eventData.recurrenceRule}`]
@@ -114,24 +131,24 @@ export class GoogleCalendarService {
       requestBody: event,
     });
 
-    // const updatedCreds = this.oauth2Client.credentials;
+    const updatedCreds = this.oauth2Client.credentials;
 
-    // if (updatedCreds.access_token !== tokens.access_token) {
-    //   // Token was refreshed
-    //   await prisma.user.update({
-    //     where: { email: userEmail },
-    //     data: {
-    //       accessToken: encrypt(`${updatedCreds.access_token}`),
-    //       tokenExpiry: new Date(updatedCreds.expiry_date ?? Date.now() + 3600_000),
-    //     },
-    //   });
+    if (updatedCreds.access_token !== tokens.access_token) {
+      // Token was refreshed
+      await prisma.user.update({
+        where: { email: tokens.user_email },
+        data: {
+          accessToken: encrypt(`${updatedCreds.access_token}`),
+          tokenExpiry: new Date(
+            updatedCreds.expiry_date ?? Date.now() + 3600_000,
+          ),
+        },
+      });
+    }
 
     return response.data;
   }
 }
-
-// http://localhost:8080/verify?code=4/0AVMBsJhd9mfR_69e1y5PX0IP9b58Jv2WJDj_q5X4lw222M1mVCjZMz0XQxnIw0tNMH1r1A&scope=https://www.googleapis.com/auth/calendar
-// http://localhost:8080/verify?code=4/0AVMBsJjo1qwRGbuugH51RO6bnBNkDc649ijOIVQuTKIC1kKOzOUtZf_13oLHLlhw5MNZUQ&scope=email%20profile%20https://www.googleapis.com/auth/calendar%20https://www.googleapis.com/auth/userinfo.profile%20https://www.googleapis.com/auth/userinfo.email%20openid&authuser=0&prompt=consent
 
 export interface GoogleIdTokenPayload {
   iss: string;
@@ -150,4 +167,5 @@ export interface GoogleIdTokenPayload {
   access_token: string;
   refresh_token: string;
   expiry_date: string;
+  timezone: string;
 }

@@ -10,10 +10,19 @@ const openai = new OpenAI({
 
 @Injectable()
 export class OpenaiService {
-  async extractScheduleIntent(message: string) {
+  async extractScheduleIntent(
+    message: string,
+    timezone: string = 'UTC',
+  ): Promise<{
+    title: string;
+    startTime: string;
+    durationMinutes: number;
+    recurrenceRule?: string;
+    participants?: string[];
+  } | null> {
     const today = new Date().toISOString();
 
-    const systemPrompt = `You are a scheduling assistant. Today is ${today}. Extract the event's title, startTime (ISO 8601), durationMinutes, participants (emails), and recurrenceRule (RFC5545) if repeating. Examples: "every day for 5 days" → FREQ=DAILY;COUNT=5, "every Monday until Aug 30" → FREQ=WEEKLY;BYDAY=MO;UNTIL=20250830T000000Z.`;
+    const systemPrompt = `You are a scheduling assistant. Today is ${today}. Assume the user's time zone is ${timezone}. Extract the event's title, startTime (ISO 8601), durationMinutes, participants (emails), and recurrenceRule (RFC5545) if repeating. Examples: "every day for 5 days" → FREQ=DAILY;COUNT=5, "every Monday until Aug 30" → FREQ=WEEKLY;BYDAY=MO;UNTIL=20250830T000000Z.`;
 
     const response = await openai.chat.completions.create({
       model: process.env.OPENAI_MODEL ?? 'gpt-4o',
