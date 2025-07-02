@@ -92,10 +92,15 @@ export class GoogleCalendarService {
     eventData: {
       title: string;
       startTime: string;
+      endTime?: string;
       durationMinutes: number;
       recurrenceRule?: string;
       participants?: string[];
       timezone: string;
+      allDay?: boolean;
+      location?: string;
+      description?: string;
+      reminders?: { method: 'email' | 'popup'; minutes: number }[];
     },
   ) {
     this.oauth2Client.setCredentials(tokens);
@@ -105,25 +110,43 @@ export class GoogleCalendarService {
       auth: this.oauth2Client,
     });
 
-    const endTime = new Date(
-      new Date(eventData.startTime).getTime() +
-        eventData.durationMinutes * 60000,
-    ).toISOString();
+    const computedEndTime =
+      eventData.endTime ??
+      new Date(
+        new Date(eventData.startTime).getTime() +
+          eventData.durationMinutes * 60000,
+      ).toISOString();
 
     const event = {
       summary: eventData.title,
-      start: {
-        dateTime: eventData.startTime,
-        timeZone: eventData.timezone,
-      },
-      end: {
-        dateTime: endTime,
-        timeZone: eventData.timezone,
-      },
+      ...(eventData.description && { description: eventData.description }),
+      ...(eventData.location && { location: eventData.location }),
+      start: eventData.allDay
+        ? { date: eventData.startTime.split('T')[0] }
+        : {
+            dateTime: eventData.startTime,
+            timeZone: eventData.timezone,
+          },
+      end: eventData.allDay
+        ? {
+            date: new Date(new Date(eventData.startTime).getTime() + 86400000)
+              .toISOString()
+              .split('T')[0],
+          }
+        : {
+            dateTime: computedEndTime,
+            timeZone: eventData.timezone,
+          },
       attendees: eventData.participants?.map((email) => ({ email })) || [],
       recurrence: eventData.recurrenceRule
         ? [`RRULE:${eventData.recurrenceRule}`]
         : undefined,
+      reminders: eventData.reminders
+        ? {
+            useDefault: false,
+            overrides: eventData.reminders,
+          }
+        : { useDefault: true },
     };
 
     const response = await calendar.events.insert({
@@ -133,12 +156,14 @@ export class GoogleCalendarService {
 
     const updatedCreds = this.oauth2Client.credentials;
 
-    if (updatedCreds.access_token !== tokens.access_token) {
-      // Token was refreshed
+    if (
+      updatedCreds.access_token &&
+      updatedCreds.access_token !== tokens.access_token
+    ) {
       await prisma.user.update({
         where: { email: tokens.user_email },
         data: {
-          accessToken: encrypt(`${updatedCreds.access_token}`),
+          accessToken: encrypt(updatedCreds.access_token),
           tokenExpiry: new Date(
             updatedCreds.expiry_date ?? Date.now() + 3600_000,
           ),

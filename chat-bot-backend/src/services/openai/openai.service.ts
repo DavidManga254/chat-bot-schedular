@@ -16,16 +16,21 @@ export class OpenaiService {
   ): Promise<{
     title: string;
     startTime: string;
+    endTime?: string;
     durationMinutes: number;
     recurrenceRule?: string;
     participants?: string[];
+    allDay?: boolean;
+    location?: string;
+    description?: string;
+    reminders?: { method: 'email' | 'popup'; minutes: number }[];
   } | null> {
-    const today = new Date().toISOString();
+    const today = new Date().toISOString().split('T')[0]; // reduces token usage
 
-    const systemPrompt = `You are a scheduling assistant. Today is ${today}. Assume the user's time zone is ${timezone}. Extract the event's title, startTime (ISO 8601), durationMinutes, participants (emails), and recurrenceRule (RFC5545) if repeating. Examples: "every day for 5 days" → FREQ=DAILY;COUNT=5, "every Monday until Aug 30" → FREQ=WEEKLY;BYDAY=MO;UNTIL=20250830T000000Z.`;
+    const systemPrompt = `You're a scheduling assistant. Assume the user's timezone is ${timezone}. Today is ${today}.Extract: - title - startTime (ISO 8601) - durationMinutes (if no endTime) - participants (emails) - recurrenceRule (RFC5545) Optional: endTime (ISO 8601), allDay (boolean), location, description, reminders (email/popup & minutes).`;
 
     const response = await openai.chat.completions.create({
-      model: process.env.OPENAI_MODEL ?? 'gpt-4o',
+      model: process.env.OPENAI_MODEL ?? 'gpt-4.1-mini',
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: message },
@@ -33,18 +38,33 @@ export class OpenaiService {
       functions: [
         {
           name: 'createCalendarEvent',
-          description: 'Extracts event scheduling intent',
+          description: 'Extract scheduling intent from natural language',
           parameters: {
             type: 'object',
             properties: {
               title: { type: 'string' },
               startTime: { type: 'string', format: 'date-time' },
+              endTime: { type: 'string', format: 'date-time' },
               durationMinutes: { type: 'integer' },
               participants: {
                 type: 'array',
                 items: { type: 'string' },
               },
               recurrenceRule: { type: 'string' },
+              allDay: { type: 'boolean' },
+              location: { type: 'string' },
+              description: { type: 'string' },
+              reminders: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    method: { type: 'string', enum: ['email', 'popup'] },
+                    minutes: { type: 'integer' },
+                  },
+                  required: ['method', 'minutes'],
+                },
+              },
             },
             required: ['title', 'startTime'],
           },
@@ -61,9 +81,14 @@ export class OpenaiService {
     return {
       title: parsed.title,
       startTime: parsed.startTime,
+      endTime: parsed.endTime,
       durationMinutes: parsed.durationMinutes ?? 60,
       recurrenceRule: parsed.recurrenceRule ?? null,
       participants: parsed.participants ?? [],
+      allDay: parsed.allDay ?? false,
+      location: parsed.location,
+      description: parsed.description,
+      reminders: parsed.reminders,
     };
   }
 }
